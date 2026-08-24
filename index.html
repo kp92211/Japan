@@ -80,6 +80,25 @@ main{padding:14px 14px 26px}
  color:var(--ink);font-size:16px;font-family:var(--ui);margin-bottom:12px}
 #q:focus{outline:2px solid var(--blue);outline-offset:-1px}
 .empty{text-align:center;color:var(--muted);font-size:13px;padding:36px 20px;line-height:1.5}
+.log{display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px dashed var(--rule)}
+.lb{flex:0 0 auto;background:none;border:1px solid var(--rule);border-radius:20px;padding:4px 10px;
+ font-family:var(--ui);font-size:11px;font-weight:650;color:var(--muted)}
+.lb.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.lb.skip.on{background:var(--muted);border-color:var(--muted);color:#fff}
+.stars{margin-left:auto;font-size:15px;letter-spacing:1px;color:var(--dim);cursor:pointer;user-select:none}
+.stars b{color:var(--mid);font-weight:400}
+.note{width:100%;margin-top:7px;padding:7px 9px;border:1px solid var(--rule);border-radius:8px;
+ background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:12.5px}
+.note:focus{outline:2px solid var(--blue);outline-offset:-1px}
+.done h3{text-decoration:none}
+.card.done{border-left-width:5px}
+.card.skip{opacity:.5}
+.sumrow{display:flex;gap:8px;margin-bottom:10px}
+.sumbox{flex:1;background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:10px;text-align:center}
+.sumbox b{display:block;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.sumbox span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.btn{width:100%;background:var(--legc,#A61C1C);color:#fff;border:0;border-radius:10px;padding:11px;
+ font-family:var(--ui);font-size:13px;font-weight:700;margin-top:8px}
 /* ---- tab bar ---- */
 #tabs{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;background:color-mix(in srgb,var(--paper) 88%,transparent);
  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
@@ -111,6 +130,13 @@ const K={meal:['#C55A11','\u25CF'],bar:['#2E75B6','\u25CF'],transport:['#8A8A8A'
 const LBL={booked:'Booked',pending:'Awaiting',todo:'To book',walkin:'Walk-in'};
 const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const clean=n=>n.replace(/\s*[—-]\s*(BOOKED|REQUESTED|PENDING)[^,]*/i,'').replace(/\s*\((PENDING|REQUESTED)[^)]*\)/i,'').replace(/\s*—\s*WALK-IN ONLY/i,'').trim();
+const LK='jp26log';
+let LOG=(()=>{try{return JSON.parse(localStorage.getItem(LK))||{}}catch(e){return{}}})();
+const save=()=>{try{localStorage.setItem(LK,JSON.stringify(LOG))}catch(e){}};
+const bid=(iso,b)=>iso+'#'+b.s+'#'+b.t.slice(0,40);
+const getL=id=>LOG[id]||{};
+const setL=(id,patch)=>{LOG[id]=Object.assign({},LOG[id]||{},patch);
+ if(!LOG[id].s&&!LOG[id].r&&!LOG[id].n)delete LOG[id]; save()};
 const hav=(a,b,c,d)=>{const R=6371,t=x=>x*Math.PI/180;const dLa=t(c-a),dLo=t(d-b);const h=Math.sin(dLa/2)**2+Math.cos(t(a))*Math.cos(t(c))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
 const tim=n=>{const m=n.match(/(\d{1,2}[:.]\d{2}\s*(?:am|pm)?)/i);return m?m[1]:''};
 const dirs=t=>{const parts=t.split('→').map(x=>x.replace(/\([^)]*\)/g,'').replace(/^(Land|To|Back to|Train to|Ferry to|Bus to)\s+/i,'').trim()).filter(Boolean); if(parts.length<2)return null; return 'https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(parts[0]+' Japan')+'&destination='+encodeURIComponent(parts[parts.length-1]+' Japan')+'&travelmode=transit'};
@@ -131,21 +157,28 @@ function strip(){const s=document.getElementById('strip');
  s.innerHTML=D.days.map((d,i)=>{const[w,n]=d.date.split(' ');
   return `<div class="chip${i===cur?' on':''}${i===ti?' today':''}" style="--c:${d.colour}" data-i="${i}">${w}<b>${n}</b></div>`}).join('');
  const on=s.querySelector('.chip.on'); if(on)on.scrollIntoView({inline:'center',block:'nearest'});}
-function evCard(b,live){const[kc]=K[b.k]||K.visit;
+function evCard(b,live,iso){const[kc]=K[b.k]||K.visit;
  const vb=b.v?`<span class="vibe" style="background:${V[b.v][0]}">${V[b.v][1]}</span>`:'';
  const dl=dirs(b.t); const ml=dl?`<a class="mapl" href="${dl}">Transit directions \u2192</a>`:(b.m?`<a class="mapl" href="${gmap(b.t)}">Open in Maps \u2192</a>`:'');
  const tr=b.tr?`<div class="tr"><span>\u21B3</span><span>${esc(b.tr)}</span></div>`:'';
  const de=b.d?`<p>${esc(b.d)}</p>`:'';
  const rw=(vb||ml)?`<div class="row">${vb}${ml}</div>`:'';
+ const id=bid(iso,b), L=getL(id);
+ const stars=[1,2,3,4,5].map(i=>`<span data-star="${i}">${(L.r||0)>=i?'<b>★</b>':'☆'}</span>`).join('');
+ const logui=`<div class="log" data-id="${id}">
+   <button class="lb${L.s==='done'?' on':''}" data-act="done">✓ Did it</button>
+   <button class="lb skip${L.s==='skip'?' on':''}" data-act="skip">✕ Skipped</button>
+   ${L.s==='done'?`<span class="stars">${stars}</span>`:''}</div>
+   ${L.s==='done'?`<input class="note" data-id="${id}" placeholder="A line about it…" value="${esc(L.n||'')}">`:''}`;
  return `${live?'<div class="now"><span class="dot"></span><span>Happening now</span></div>':''}
  <div class="ev" style="--nc:${kc}"><div class="tm">${b.s}<i>${b.e}</i></div><div class="node"></div>
- <div class="card">${de||tr||rw?`<h3>${esc(b.t)}</h3>${de}${tr}${rw}`:`<h3>${esc(b.t)}</h3>`}</div></div>`;}
+ <div class="card ${L.s||''}"><h3>${esc(b.t)}</h3>${de}${tr}${rw}${logui}</div></div>`;}
 function renderDay(i){const d=D.days[i]; if(!d)return'';
  const ti=todayIdx(), now=new Date(), nm=now.getHours()*60+now.getMinutes();
  let done=false;
  const evs=d.blocks.map(b=>{let live=false;
    if(i===ti&&!done&&mins(b.e)>nm){live=true;done=true}
-   return evCard(b,live)}).join('');
+   return evCard(b,live,d.iso)}).join('');
  return `<div class="hotel"><span>\u{1F3E8}</span><span>${esc(d.hotel)}</span><a href="${gmap(d.hotel)}">Maps</a></div>
   <div class="rail">${evs}</div>`;}
 function render(){const v=document.getElementById('view');
@@ -181,10 +214,40 @@ function render(){const v=document.getElementById('view');
     p=>{GEO={lat:p.coords.latitude,lng:p.coords.longitude}; render()},
     ()=>{b.textContent='Denied'},{timeout:8000,maximumAge:60000});};
   return}
- if(tab==='terms'){v.innerHTML=`<div class="sec">Getting around</div>`+
+ if(tab==='terms'){
+  const ent=Object.entries(LOG); const dn=ent.filter(([,x])=>x.s==='done'), sk=ent.filter(([,x])=>x.s==='skip');
+  const rated=dn.filter(([,x])=>x.r).sort((a,b)=>b[1].r-a[1].r);
+  const nm=id=>id.split('#').slice(2).join('#'), dt=id=>id.split('#')[0];
+  const fmt=iso=>{const d=D.days.find(x=>x.iso===iso); return d?d.date:iso};
+  const logsec=`<div class="sec">Trip log</div>
+   <div class="sumrow"><div class="sumbox"><b>${dn.length}</b><span>done</span></div>
+   <div class="sumbox"><b>${sk.length}</b><span>skipped</span></div>
+   <div class="sumbox"><b>${D.days.reduce((a,d)=>a+d.blocks.length,0)}</b><span>total</span></div></div>`
+   + (rated.length?`<div class="sec">Your ratings</div>`+rated.map(([id,x])=>
+      `<div class="li"><div class="nm">${esc(nm(id))}<em>${esc(fmt(dt(id)))}${x.n?' · '+esc(x.n):''}</em></div>
+       <span style="color:var(--mid);font-size:13px;white-space:nowrap">${'★'.repeat(x.r)}</span></div>`).join('')
+     :(dn.length?'':`<div class="empty">Nothing logged yet. On any day, tap <b>✓ Did it</b> or <b>✕ Skipped</b> under an activity.</div>`))
+   + (ent.length?`<button class="btn" id="exp">Copy trip log as text</button>
+      <button class="btn" id="clr" style="background:none;color:var(--tour);border:1px solid var(--rule)">Clear all log data</button>`:'');
+  v.innerHTML=logsec+`<div class="sec">Getting around</div>`+
    TRAVEL.map(([n,t,u])=>`<div class="gl"><b>${esc(n)}</b><p>${esc(t)}</p>${u?`<a class="mapl" href="${u}">Open \u2192</a>`:''}</div>`).join('')+
    `<div class="sec">What the words mean</div>`+
-   GL.map(([n,t])=>`<div class="gl"><b>${esc(n)}</b><p>${esc(t)}</p></div>`).join(''); return}
+   GL.map(([n,t])=>`<div class="gl"><b>${esc(n)}</b><p>${esc(t)}</p></div>`).join('');
+  const ex=document.getElementById('exp');
+  if(ex)ex.onclick=()=>{
+   const nm2=id=>id.split('#').slice(2).join('#'), dt2=id=>id.split('#')[0];
+   const byDay={}; Object.entries(LOG).forEach(([id,x])=>{(byDay[dt2(id)]=byDay[dt2(id)]||[]).push([id,x])});
+   let out='JAPAN 2026 — TRIP LOG\n\n';
+   Object.keys(byDay).sort().forEach(iso=>{const d=D.days.find(y=>y.iso===iso);
+    out+=(d?d.date+' — '+d.title:iso)+'\n';
+    byDay[iso].forEach(([id,x])=>{out+='  '+(x.s==='done'?'[x] ':'[ ] ')+nm2(id)
+      +(x.r?'  '+'★'.repeat(x.r):'')+(x.n?'\n      “'+x.n+'”':'')+'\n'});
+    out+='\n'});
+   navigator.clipboard.writeText(out).then(()=>{ex.textContent='Copied ✓';setTimeout(()=>ex.textContent='Copy trip log as text',1800)})
+    .catch(()=>{ex.textContent='Copy failed — select manually'});};
+  const cl=document.getElementById('clr');
+  if(cl)cl.onclick=()=>{if(confirm('Delete every Did it / Skipped mark, rating and note? This cannot be undone.')){LOG={};save();render()}};
+  return}
  if(tab==='find'){v.innerHTML=`<input id="q" placeholder="Search places, food, days\u2026" autocomplete="off">
    <div id="res"><div class="empty">Type to search everything \u2014 every activity, restaurant, bar and note across all 27 days.</div></div>`;
   const q=document.getElementById('q'); q.focus();
@@ -199,6 +262,18 @@ function render(){const v=document.getElementById('view');
   return}}
 document.getElementById('strip').onclick=e=>{const c=e.target.closest('.chip'); if(!c)return;
  cur=+c.dataset.i; render(); window.scrollTo({top:0})};
+document.getElementById('view').addEventListener('click',e=>{
+ const lb=e.target.closest('.lb');
+ if(lb){const id=lb.closest('.log').dataset.id, act=lb.dataset.act;
+  const cur=getL(id).s; setL(id,{s:cur===act?null:act}); render(); return}
+ const st=e.target.closest('[data-star]');
+ if(st){const id=st.closest('.log').dataset.id, v=+st.dataset.star;
+  setL(id,{r:getL(id).r===v?0:v}); render(); return}
+});
+document.getElementById('view').addEventListener('change',e=>{
+ const n=e.target.closest('.note'); if(!n)return; setL(n.dataset.id,{n:n.value});
+});
+document.getElementById('view').onclick2=null;
 document.getElementById('view').onclick=e=>{const r=e.target.closest('[data-go]'); if(!r)return;
  cur=+r.dataset.go; tab='days'; document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t==='days'));
  render(); window.scrollTo({top:0})};
