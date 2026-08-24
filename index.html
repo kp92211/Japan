@@ -182,5 +182,7 @@ document.getElementById('tabs').onclick=e=>{const b=e.target.closest('button'); 
  if(tab==='today'){const t=todayIdx(); cur=t>=0?t:0}
  render(); window.scrollTo({top:0})};
 const t0=todayIdx(); cur=t0>=0?t0:0; render();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{
+ navigator.serviceWorker.register('./sw.js').catch(()=>{});});}
 </script>
 </body></html>
