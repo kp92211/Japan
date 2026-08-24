@@ -93,6 +93,19 @@ main{padding:14px 14px 26px}
 .done h3{text-decoration:none}
 .card.done{border-left-width:5px}
 .card.skip{opacity:.5}
+.card.mine{border-left-style:dashed}
+.mytag{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--legc,#A61C1C);margin-bottom:4px}
+.addbtn{width:100%;margin-top:8px;background:none;border:1.5px dashed var(--rule);border-radius:11px;padding:13px;
+ color:var(--muted);font-family:var(--ui);font-size:13px;font-weight:650}
+.addform{background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:11px;margin-top:8px}
+.addform input{width:100%;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--paper);
+ color:var(--ink);font-family:var(--ui);font-size:16px;margin-bottom:8px}
+.addform .r{display:flex;gap:8px}
+.addform .r input{flex:0 0 96px;margin-bottom:0}
+.addform button{flex:1;background:var(--legc,#A61C1C);color:#fff;border:0;border-radius:8px;padding:10px;
+ font-family:var(--ui);font-size:13px;font-weight:700}
+.del{background:none;border:0;color:var(--tour);font-size:11px;font-weight:700;font-family:var(--ui);
+ padding:6px 0 0;display:block}
 .sumrow{display:flex;gap:8px;margin-bottom:10px}
 .sumbox{flex:1;background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:10px;text-align:center}
 .sumbox b{display:block;font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
@@ -134,6 +147,9 @@ const LK='jp26log';
 let LOG=(()=>{try{return JSON.parse(localStorage.getItem(LK))||{}}catch(e){return{}}})();
 const save=()=>{try{localStorage.setItem(LK,JSON.stringify(LOG))}catch(e){}};
 const bid=(iso,b)=>iso+'#'+b.s+'#'+b.t.slice(0,40);
+const AK='jp26add';
+let ADD=(()=>{try{return JSON.parse(localStorage.getItem(AK))||{}}catch(e){return{}}})();
+const saveA=()=>{try{localStorage.setItem(AK,JSON.stringify(ADD))}catch(e){}};
 const getL=id=>LOG[id]||{};
 const setL=(id,patch)=>{LOG[id]=Object.assign({},LOG[id]||{},patch);
  if(!LOG[id].s&&!LOG[id].r&&!LOG[id].n)delete LOG[id]; save()};
@@ -170,17 +186,22 @@ function evCard(b,live,iso){const[kc]=K[b.k]||K.visit;
    <button class="lb skip${L.s==='skip'?' on':''}" data-act="skip">✕ Skipped</button>
    ${L.s==='done'?`<span class="stars">${stars}</span>`:''}</div>
    ${L.s==='done'?`<input class="note" data-id="${id}" placeholder="A line about it…" value="${esc(L.n||'')}">`:''}`;
+ const tag=b.mine?`<div class="mytag">Added by you</div>`:'';
+ const del=b.mine?`<button class="del" data-del="${esc(b.t)}" data-iso="${iso}">Remove</button>`:'';
  return `${live?'<div class="now"><span class="dot"></span><span>Happening now</span></div>':''}
- <div class="ev" style="--nc:${kc}"><div class="tm">${b.s}<i>${b.e}</i></div><div class="node"></div>
- <div class="card ${L.s||''}"><h3>${esc(b.t)}</h3>${de}${tr}${rw}${logui}</div></div>`;}
+ <div class="ev" style="--nc:${kc}"><div class="tm">${b.s}${b.mine?'':`<i>${b.e}</i>`}</div><div class="node"></div>
+ <div class="card ${L.s||''} ${b.mine?'mine':''}">${tag}<h3>${esc(b.t)}</h3>${de}${tr}${rw}${logui}${del}</div></div>`;}
 function renderDay(i){const d=D.days[i]; if(!d)return'';
  const ti=todayIdx(), now=new Date(), nm=now.getHours()*60+now.getMinutes();
  let done=false;
- const evs=d.blocks.map(b=>{let live=false;
-   if(i===ti&&!done&&mins(b.e)>nm){live=true;done=true}
+ const mine=(ADD[d.iso]||[]).map(x=>({s:x.s,e:x.s,t:x.t,d:'',tr:'',m:true,v:'',k:'visit',mine:true}));
+ const evs=d.blocks.concat(mine).sort((a,b)=>mins(a.s)-mins(b.s)).map(b=>{let live=false;
+   if(i===ti&&!done&&!b.mine&&mins(b.e)>nm){live=true;done=true}
    return evCard(b,live,d.iso)}).join('');
  return `<div class="hotel"><span>\u{1F3E8}</span><span>${esc(d.hotel)}</span><a href="${gmap(d.hotel)}">Maps</a></div>
-  <div class="rail">${evs}</div>`;}
+  <div class="rail">${evs}</div>
+  <button class="addbtn" id="addb">+ Add something you did</button>
+  <div id="addf"></div>`;}
 function render(){const v=document.getElementById('view');
  if(tab==='today'||tab==='days'){setTop(D.days[cur]); strip(); v.innerHTML=renderDay(cur); return}
  setTop(null); strip();
@@ -240,7 +261,9 @@ function render(){const v=document.getElementById('view');
    let out='JAPAN 2026 — TRIP LOG\n\n';
    Object.keys(byDay).sort().forEach(iso=>{const d=D.days.find(y=>y.iso===iso);
     out+=(d?d.date+' — '+d.title:iso)+'\n';
-    byDay[iso].forEach(([id,x])=>{out+='  '+(x.s==='done'?'[x] ':'[ ] ')+nm2(id)
+    const mineT=(ADD[iso]||[]).map(z=>z.t.slice(0,40));
+    byDay[iso].forEach(([id,x])=>{const isMine=mineT.includes(nm2(id));
+     out+='  '+(x.s==='done'?'[x] ':'[ ] ')+(isMine?'+ ':'')+nm2(id)
       +(x.r?'  '+'★'.repeat(x.r):'')+(x.n?'\n      “'+x.n+'”':'')+'\n'});
     out+='\n'});
    navigator.clipboard.writeText(out).then(()=>{ex.textContent='Copied ✓';setTimeout(()=>ex.textContent='Copy trip log as text',1800)})
@@ -263,6 +286,24 @@ function render(){const v=document.getElementById('view');
 document.getElementById('strip').onclick=e=>{const c=e.target.closest('.chip'); if(!c)return;
  cur=+c.dataset.i; render(); window.scrollTo({top:0})};
 document.getElementById('view').addEventListener('click',e=>{
+ const ab=e.target.closest('#addb');
+ if(ab){const f=document.getElementById('addf'); const now=new Date();
+  const hh=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  f.innerHTML=`<div class="addform"><input id="axt" placeholder="What did you do?" autocomplete="off">
+   <div class="r"><input id="axh" value="${hh}" placeholder="19:30"><button id="axs">Add to this day</button></div></div>`;
+  ab.style.display='none'; document.getElementById('axt').focus();
+  document.getElementById('axs').onclick=()=>{
+   const t=document.getElementById('axt').value.trim(); if(!t)return;
+   let h=document.getElementById('axh').value.trim(); if(!/^\d{1,2}:\d{2}$/.test(h))h='12:00';
+   if(h.length===4)h='0'+h;
+   const iso=D.days[cur].iso; (ADD[iso]=ADD[iso]||[]).push({s:h,t:t}); saveA();
+   setL(bid(iso,{s:h,t:t}),{s:'done'}); render();};
+  return}
+ const dl=e.target.closest('[data-del]');
+ if(dl){const iso=dl.dataset.iso, t=dl.dataset.del;
+  ADD[iso]=(ADD[iso]||[]).filter(x=>x.t!==t); if(!ADD[iso].length)delete ADD[iso]; saveA();
+  Object.keys(LOG).forEach(k=>{if(k.startsWith(iso+'#')&&k.endsWith('#'+t.slice(0,40)))delete LOG[k]}); save();
+  render(); return}
  const lb=e.target.closest('.lb');
  if(lb){const id=lb.closest('.log').dataset.id, act=lb.dataset.act;
   const cur=getL(id).s; setL(id,{s:cur===act?null:act}); render(); return}
